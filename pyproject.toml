@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "rigol-ds1000e-cli"
+version = "0.1.0"
+description = "Linux USBTMC CLI for RIGOL DS1000E/DS1000D oscilloscopes"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = []
+
+[project.optional-dependencies]
+test = ["pytest>=8"]
+
+[project.scripts]
+rigol = "rigol_cli.cli:main"
+
+[tool.setuptools]
+packages = ["rigol_cli"]
+
+[tool.pytest.ini_options]
+addopts = "-q"
+testpaths = ["tests"]
+pythonpath = ["."]

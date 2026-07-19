@@ -1,0 +1,2 @@
+# Allow the active desktop user and plugdev members to use RIGOL USBTMC devices.
+SUBSYSTEM=="usb", ENV{DEVTYPE}=="usb_device", ATTR{idVendor}=="1ab1", GROUP="plugdev", MODE="0660", TAG+="uaccess"
