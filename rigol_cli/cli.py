@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
+from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Sequence
 
@@ -46,12 +48,32 @@ SNAPSHOT_COMMANDS = {
     "channel2_offset_volts": ":CHANnel2:OFFSet?",
 }
 
+_NEGATIVE_VALUE_PREFIX = "__RIGOL_NEGATIVE_VALUE__"
+
+
+def _protect_negative_values(argv: Sequence[str]) -> list[str]:
+    pattern = re.compile(r"^-(?:\d+(?:\.\d*)?(?:[eE][+-]?\d+)?|GREaterthan|LESSthan)$", re.IGNORECASE)
+    return [_NEGATIVE_VALUE_PREFIX + value if pattern.fullmatch(value) else value for value in argv]
+
+
+def _restore_negative_values(args: argparse.Namespace) -> None:
+    for name, value in vars(args).items():
+        if isinstance(value, str) and value.startswith(_NEGATIVE_VALUE_PREFIX):
+            setattr(args, name, value.removeprefix(_NEGATIVE_VALUE_PREFIX))
+        elif isinstance(value, list):
+            setattr(args, name, [
+                item.removeprefix(_NEGATIVE_VALUE_PREFIX)
+                if isinstance(item, str) and item.startswith(_NEGATIVE_VALUE_PREFIX) else item
+                for item in value
+            ])
+
 
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="rigol", description="RIGOL DS1000E/DS1000D USBTMC CLI")
     parser.add_argument("--device", help="USBTMC node, for example /dev/usbtmc2")
     parser.add_argument("--serial", help="select an attached RIGOL by serial number")
     parser.add_argument("--timeout-ms", type=int, default=5000, help="USBTMC timeout (default: 5000)")
+    parser.add_argument("--command-delay-ms", type=float, default=50.0, help="DS1152E processing delay after writes (default: 50 ms)")
     parser.add_argument("--no-clear", action="store_true", help="do not clear the USBTMC session on open")
     sub = parser.add_subparsers(dest="command", required=True)
 
@@ -113,6 +135,7 @@ def _session(args: argparse.Namespace) -> LinuxUsbtmc:
         choose_device(args.device, args.serial),
         timeout_ms=args.timeout_ms,
         clear_on_open=not args.no_clear,
+        command_delay_ms=args.command_delay_ms,
     )
 
 
@@ -133,6 +156,18 @@ def _parse_number(value: str) -> float | str:
     if abs(number) >= 9.0e37:
         return "unavailable"
     return number
+
+
+def _normalize_set_value(value: str) -> str:
+    if not re.fullmatch(r"[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?", value):
+        return value
+    try:
+        normalized = format(Decimal(value), "f")
+    except InvalidOperation:
+        return value
+    if "." in normalized:
+        normalized = normalized.rstrip("0").rstrip(".")
+    return normalized or "0"
 
 
 def _query_snapshot(scope: LinuxUsbtmc) -> dict[str, object]:
@@ -207,7 +242,9 @@ def _run_batch(scope: LinuxUsbtmc, lines) -> int:
 
 def main(argv: Sequence[str] | None = None) -> int:
     parser = _build_parser()
-    args = parser.parse_args(argv)
+    raw_argv = list(sys.argv[1:] if argv is None else argv)
+    args = parser.parse_args(_protect_negative_values(raw_argv))
+    _restore_negative_values(args)
     try:
         if args.command == "list":
             for item in discover_devices():
@@ -257,7 +294,14 @@ def main(argv: Sequence[str] | None = None) -> int:
                 if not args.values:
                     raise ProtocolError("set requires at least one value")
                 with _session(args) as scope:
-                    scope.write(command + " " + " ".join(args.values))
+                    if spec.name == "acquire.mode":
+                        value = args.values[0].strip().upper()
+                        aliases = {"REAL_TIME": "RTIM", "EQUAL_TIME": "ETIM"}
+                        value = aliases.get(value, value)
+                        scope.write(":TIMebase:FORMat YT")
+                        scope.write(f":ACQuire:MODE {value}")
+                        return 0
+                    scope.write(command + " " + " ".join(_normalize_set_value(value) for value in args.values))
                 return 0
             if spec.kind != "action":
                 raise ProtocolError(f"{spec.name} is not an action")

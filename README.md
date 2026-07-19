@@ -98,6 +98,10 @@ the scope was running beforehand.
 python -m pytest
 ```
 
+The current unit suite has 20 tests. Connected acquisition, channel, measurement,
+trigger, MATH, FFT, and robustness reports are maintained in the adjacent DG1022
+repository's `validation/` directory.
+
 The checked-in official references are:
 
 - `docs/official/DS1000E_DS1000D_ProgrammingGuide_EN.pdf`

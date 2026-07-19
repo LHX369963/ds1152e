@@ -54,6 +54,35 @@ samples reconstructed approximately -5 mV.
 Waveform download restores the original points mode. The final points mode after
 validation was `MAXIMUM`.
 
+## Detailed Connected Acceptance
+
+The connected suite in the adjacent DG1022 repository uses the installed `rigol`
+entry point for configuration and the fixed DG CH1 -> DS CH1 / DG CH2 -> DS CH2
+wiring for observation. Current machine-readable reports cover:
+
+- 136 core cases for acquisition types/modes/averaging, memory depth, NORMAL,
+  MAXIMUM and RAW transfers, both channels, DC/AC/GND coupling, channel switches,
+  probe factors, scale/offset grids, all 20 automatic measurements, and 18
+  CLI waveform export combinations
+- 102 trigger/math cases covering EDGE, PULSE, SLOPE, PATTERN, DURATION, VIDEO,
+  ALTERNATION, coupling and holdoff settings, A+B/A-B/AB, and three FFT inputs
+- 33 shared robustness cases for repeated sessions, exponent/fixed numeric forms,
+  invalid input rejection, and batch write/query operation
+
+This work found three CLI compatibility issues. Writes now wait 50 ms by default,
+scientific-notation values are converted to fixed decimal for the DS1152E parser,
+and `EQUAL_TIME` is sent using the `ETIM` spelling accepted by this firmware.
+Negative trigger enums such as `-GREaterthan` are protected from argparse.
+
+The programming guide's `ACQuire:MODE ROLL` value is ignored by this DS1152E
+firmware even at 500 ms/div and slower; direct long and abbreviated spellings were
+tested. The CLI sends the documented command but does not claim that the instrument
+entered Roll. VIDEO, PATTERN, and DURATION settings were exhaustively read back,
+but their physical trigger conditions cannot be produced by the fixed two analog
+generator connections. MATH/FFT exports are validated as raw display bytes because
+the programming interface exposes no math vertical calibration or FFT frequency-axis
+metadata.
+
 ## Final Connected Baseline
 
 ```text
@@ -65,4 +94,4 @@ DS bandwidth limit: OFF/OFF
 DS timebase: 200 us/div
 ```
 
-Unit test result: 15 passed.
+Unit test result: 20 passed.

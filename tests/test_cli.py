@@ -37,6 +37,30 @@ def test_catalog_set_and_get_render_commands(monkeypatch, capsys):
     assert capsys.readouterr().out.strip() == "ON"
 
 
+def test_set_normalizes_scientific_notation_for_device_parser(monkeypatch):
+    scope = FakeScope()
+    monkeypatch.setattr(cli, "_session", lambda args: fake_session(scope))
+    assert cli.main(["set", "timebase.scale", "2e-06"]) == 0
+    assert scope.writes == [":TIMebase:SCALe 0.000002"]
+
+
+def test_set_accepts_negative_trigger_enum(monkeypatch):
+    scope = FakeScope()
+    monkeypatch.setattr(cli, "_session", lambda args: fake_session(scope))
+    assert cli.main(["set", "trigger.pulse.mode", "-GREaterthan"]) == 0
+    assert scope.writes == [":TRIGger:PULSe:MODE -GREaterthan"]
+
+
+def test_acquisition_mode_uses_device_aliases(monkeypatch):
+    scope = FakeScope()
+    monkeypatch.setattr(cli, "_session", lambda args: fake_session(scope))
+    assert cli.main(["set", "acquire.mode", "EQUAL_TIME"]) == 0
+    assert scope.writes == [":TIMebase:FORMat YT", ":ACQuire:MODE ETIM"]
+    scope.writes.clear()
+    assert cli.main(["set", "acquire.mode", "ROLL"]) == 0
+    assert scope.writes == [":TIMebase:FORMat YT", ":ACQuire:MODE ROLL"]
+
+
 def test_destructive_actions_require_confirmation(capsys):
     assert cli.main(["action", "general.reset"]) == 1
     assert "repeat with --yes" in capsys.readouterr().err

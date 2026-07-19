@@ -3,6 +3,7 @@ from __future__ import annotations
 import array
 import fcntl
 import os
+import time
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -88,12 +89,16 @@ class LinuxUsbtmc:
         *,
         timeout_ms: int = 5000,
         clear_on_open: bool = True,
+        command_delay_ms: float = 50.0,
     ) -> None:
         if timeout_ms <= 0:
             raise TransportError("timeout must be positive")
+        if command_delay_ms < 0:
+            raise TransportError("command delay cannot be negative")
         self.device = device
         self.timeout_ms = timeout_ms
         self.clear_on_open = clear_on_open
+        self.command_delay_ms = command_delay_ms
         self._fd: int | None = None
 
     def __enter__(self) -> "LinuxUsbtmc":
@@ -147,9 +152,12 @@ class LinuxUsbtmc:
     def write(self, command: str | bytes) -> int:
         payload = self._encode(command)
         try:
-            return os.write(self.fd, payload)
+            written = os.write(self.fd, payload)
         except OSError as exc:
             raise TransportError(f"USBTMC write failed: {exc}") from exc
+        if self.command_delay_ms:
+            time.sleep(self.command_delay_ms / 1000)
+        return written
 
     def read(self, *, max_bytes: int = 2 * 1024 * 1024) -> bytes:
         if max_bytes <= 0:
